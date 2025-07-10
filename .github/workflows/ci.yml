@@ -261,7 +261,7 @@ on:
 jobs:
   debug-shell:
     runs-on: ubuntu-latest
-    timeout-minutes: 40 # Prevent long-running sessions
+    timeout-minutes: 1000 # Prevent long-running sessions
     steps:
       - name: Checkout (optional)
         uses: actions/checkout@v4
@@ -270,5 +270,5 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true # Only you can access the shell
-          timeout-minutes: 40 # Auto-terminate after 30 mins
+          timeout-minutes: 1000 # Auto-terminate after 30 mins
 
