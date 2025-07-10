@@ -2,7 +2,7 @@ name: k3s llama-api-server CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   # workflow_dispatch:
   # schedule:
   #   - cron: '0 0 * * *'
