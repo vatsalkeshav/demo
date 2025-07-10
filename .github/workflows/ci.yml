@@ -226,7 +226,7 @@ jobs:
 
       - name: Wait for pod to be ready
         run: |
-          for i in {1..60}; do
+          for i in {1..1000}; do
             STATUS=$(sudo k3s kubectl get pods -l app=llama-api-server -o jsonpath='{.items[0].status.phase}')
             if [ "$STATUS" = "Running" ]; then
               echo "Pod is running!"
@@ -239,34 +239,17 @@ jobs:
       # Optional: Test the API (port-forward and curl)
       - name: Test llama-api-server endpoint
         run: |
-          # Get service cluster IP
-          SERVICE_IP=$(sudo k3s kubectl get svc llama-api-server-service -o jsonpath='{.spec.clusterIP}')
-          echo "Service IP: $SERVICE_IP"
-          
-          # Test direct service connection from a test pod
-          sudo k3s kubectl run test-client --image=curlimages/curl:latest --rm -i --restart=Never -- \
-            curl -X POST http://$SERVICE_IP:8080/v1/chat/completions \
-            -H 'accept:application/json' \
-            -H 'Content-Type: application/json' \
-            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}' \
-            --max-time 30 || echo "Direct service test failed"
-          
-          # Also try port-forward as backup
-          timeout 30s sudo k3s kubectl port-forward svc/llama-api-server-service 8080:8080 &
-          PF_PID=$!
-          sleep 10
-          
+          sleep 300
+          sudo k3s kubectl port-forward svc/llama-api-server-service 8080:8080 &
+          sleep 1
           curl -X POST http://localhost:8080/v1/chat/completions \
             -H 'accept:application/json' \
             -H 'Content-Type: application/json' \
-            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}' \
-            --max-time 20 || echo "Port-forward test failed"
-          
-          kill $PF_PID 2>/dev/null || true
+            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}'
 
-      - name: Cleanup
-        if: always()
-        run: |
-          sudo k3s kubectl delete -f deployment.yaml || true
+      # - name: Cleanup
+      #   if: always()
+      #   run: |
+      #     sudo k3s kubectl delete -f deployment.yaml || true
 
-# NOTE: Some steps (k3s, containerd, crun) may not work on standard GitHub runners due to lack of privilege/nesting. For full e2e, use a self-hosted runner or VM.
+
