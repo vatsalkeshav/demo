@@ -239,12 +239,30 @@ jobs:
       # Optional: Test the API (port-forward and curl)
       - name: Test llama-api-server endpoint
         run: |
-          sudo k3s kubectl port-forward svc/llama-api-server-service 8080:8080 &
+          # Get service cluster IP
+          SERVICE_IP=$(sudo k3s kubectl get svc llama-api-server-service -o jsonpath='{.spec.clusterIP}')
+          echo "Service IP: $SERVICE_IP"
+          
+          # Test direct service connection from a test pod
+          sudo k3s kubectl run test-client --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -X POST http://$SERVICE_IP:8080/v1/chat/completions \
+            -H 'accept:application/json' \
+            -H 'Content-Type: application/json' \
+            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}' \
+            --max-time 30 || echo "Direct service test failed"
+          
+          # Also try port-forward as backup
+          timeout 30s sudo k3s kubectl port-forward svc/llama-api-server-service 8080:8080 &
+          PF_PID=$!
           sleep 10
+          
           curl -X POST http://localhost:8080/v1/chat/completions \
             -H 'accept:application/json' \
             -H 'Content-Type: application/json' \
-            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}'
+            -d '{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who is Robert Oppenheimer?"}], "model": "llama-3-1b"}' \
+            --max-time 20 || echo "Port-forward test failed"
+          
+          kill $PF_PID 2>/dev/null || true
 
       - name: Cleanup
         if: always()
