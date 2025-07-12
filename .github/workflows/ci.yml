@@ -41,7 +41,7 @@ jobs:
 
       - name: Install plugin verify
         run: |
-          which wasmedge
+          # which wasmedge
           wasmedge -v
 
       - name: Install crun with WasmEdge support
