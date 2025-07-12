@@ -21,14 +21,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # - name: Install system dependencies
-      #   run: |
-      #     sudo apt update && sudo apt upgrade -y
-      #     sudo apt install -y llvm-14-dev liblld-14-dev software-properties-common gcc g++ cmake zlib1g-dev build-essential python3 python3-dev python3-pip git clang \
-      #     make git gcc build-essential pkgconf libtool \
-      #     libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
-      #     go-md2man libtool autoconf python3 automake
-
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -38,23 +30,6 @@ jobs:
       - name: Install plugin
         run: |
           curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_nn-ggml -v 0.14.1
-
-      # - name: Install plugin verify
-      #   run: |
-      #     which wasmedge
-      #     wasmedge -v
-
-      # - name: Install crun with WasmEdge support
-      #   run: |
-      #     git clone https://github.com/containers/crun
-      #     cd crun
-      #     ./autogen.sh
-      #     ./configure --with-wasmedge
-      #     make
-      #     sudo make install
-      #     source ~/.bashrc
-      #     which crun
-      #     crun -v
 
       - name: Install runwasi-wasmedge-shim
         run: |
@@ -71,61 +46,7 @@ jobs:
         run: |
           cd
           curl -sfL https://get.k3s.io | sh -
-          sudo chmod 777 /etc/rancher/k3s/k3s.yaml
-
-      - name: Configure containerd to use crun as default OCI runtime
-        run: |
-          sudo chmod 777 -R /var
-          sudo tee /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /dev/null <<'EOF'
-          version = 3
-          root = "/var/lib/rancher/k3s/agent/containerd"
-          state = "/run/k3s/containerd"
-          [grpc]
-            address = "/run/k3s/containerd/containerd.sock"
-          [plugins.'io.containerd.internal.v1.opt']
-            path = "/var/lib/rancher/k3s/agent/containerd"
-          [plugins.'io.containerd.grpc.v1.cri']
-            stream_server_address = "127.0.0.1"
-            stream_server_port = "10010"
-          [plugins.'io.containerd.cri.v1.runtime']
-            enable_selinux = false
-            enable_unprivileged_ports = true
-            enable_unprivileged_icmp = true
-            device_ownership_from_security_context = false
-            default_runtime_name = "crun"
-          [plugins.'io.containerd.cri.v1.images']
-            snapshotter = "overlayfs"
-            disable_snapshot_annotations = true
-          [plugins.'io.containerd.cri.v1.images'.pinned_images]
-            sandbox = "rancher/mirrored-pause:3.6"
-          [plugins.'io.containerd.cri.v1.runtime'.cni]
-            bin_dir = "/var/lib/rancher/k3s/data/cni"
-            conf_dir = "/var/lib/rancher/k3s/agent/etc/cni/net.d"
-          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
-            runtime_type = "io.containerd.runc.v2"
-          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
-            SystemdCgroup = true
-          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runhcs-wcow-process]
-            runtime_type = "io.containerd.runhcs.v1"
-          [plugins.'io.containerd.cri.v1.runtime'.containerd]
-            default_runtime_name = "crun"
-            [plugins."io.containerd.cri.v1.runtime".containerd.runtimes]
-              [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.crun]
-                runtime_type = "io.containerd.runc.v2"
-                [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.crun.options]
-                  BinaryName = "/usr/local/bin/crun"
-                  SystemdCgroup = true
-          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.wasmedge]
-            runtime_type = "io.containerd.wasmedge.v1"
-            privileged_without_host_devices = true
-            [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.wasmedge.options]
-              BinaryName = "/usr/local/bin/containerd-shim-wasmedge-v1"
-              SystemdCgroup = true
-          [plugins.'io.containerd.cri.v1.images'.registry]
-            config_path = "/var/lib/rancher/k3s/agent/etc/containerd/certs.d"
-          EOF
-          sudo systemctl restart k3s
-          sudo crictl info | grep -A 10 "defaultRuntime"
+          sudo chmod 777 /etc/rancher/k3s/k3s.yaml # hack
 
       - name: Build the llama-api-server image and import it to k3s containerd
         run: |
@@ -300,20 +221,40 @@ jobs:
           sudo k3s kubectl apply -f deployment.yaml
           sudo k3s kubectl get pods
 
-      - name: Start tmate session (SSH)
-        uses: mxschmitt/action-tmate@v3
+      # - name: Start tmate session (SSH)
+      #   uses: mxschmitt/action-tmate@v3
 
-      # - name: Wait for pod to be ready
-      #   run: |
-      #     for i in {1..1000}; do
-      #       STATUS=$(sudo k3s kubectl get pods -l app=llama-api-server -o jsonpath='{.items[0].status.phase}')
-      #       if [ "$STATUS" = "Running" ]; then
-      #         echo "Pod is running!"
-      #         break
-      #       fi
-      #       echo "Waiting for pod... ($i)"
-      #       sleep 10
-      #     done
+      - name: Create Logs Directory
+        run: mkdir -p logs
+      
+      - name: Get Pod Name
+        id: get-pod
+        run: |
+          POD_NAME=$(sudo k3s kubectl get pods -l app=llama-api-server --no-headers -o custom-columns=":metadata.name" | head -n 1)
+          echo "POD_NAME=$POD_NAME" >> $GITHUB_ENV
+
+      - name: Save Pod Logs
+        run: |
+          sudo k3s kubectl logs ${{ env.POD_NAME }} > "logs/pod_logs_$(date +'%Y-%m-%d').log"
+
+      - name: Test API and Save Output
+        run: |
+          curl -X POST http://localhost:8080/v1/chat/completions \
+               -H 'accept:application/json' \
+               -H 'Content-Type: application/json' \
+               -d '{
+                   "messages": [
+                       {"role": "system", "content": "You are a helpful assistant."},
+                       {"role": "user", "content": "Who is Robert Oppenheimer?"}
+                   ],
+                   "model": "llama-3-1b"
+               }' > "logs/api_response_$(date +'%Y-%m-%d').json"
+
+      - name: Upload Logs as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: daily-logs-$(date +'%Y-%m-%d')
+          path: logs/
 
       # # Optional: Test the API (port-forward and curl)
       # - name: Test llama-api-server endpoint
