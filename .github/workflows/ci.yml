@@ -35,7 +35,7 @@ jobs:
       - name: Install plugin
         run: |
           curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_nn-ggml -v 0.14.1
-          exec $SHELL
+          source ~/.bashrc
           which wasmedge
           wasmedge -v
 
@@ -51,7 +51,7 @@ jobs:
           ./configure --with-wasmedge
           make
           sudo make install
-          exec $SHELL
+          source ~/.bashrc
           which crun
           crun -v
 
@@ -63,7 +63,7 @@ jobs:
           ./scripts/setup-linux.sh
           make build-wasmedge
           INSTALL="sudo install" LN="sudo ln -sf" make install-wasmedge
-          exec $SHELL
+          source ~/.bashrc
           which containerd-shim-wasmedge-v1
 
       - name: Install k3s (Kubernetes lightweight)
