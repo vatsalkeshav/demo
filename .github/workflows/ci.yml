@@ -251,9 +251,9 @@ jobs:
                }' > "logs/api_response_$(date +'%Y-%m-%d').json"
 
       - name: Upload Logs as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: daily-logs-$(date +'%Y-%m-%d')
+          name: daily-logs-${{ github.run_number }}
           path: logs/
 
       # # Optional: Test the API (port-forward and curl)
