@@ -224,20 +224,46 @@ jobs:
       # - name: Start tmate session (SSH)
       #   uses: mxschmitt/action-tmate@v3
 
+      - name: Port-forward in background
+        run: |
+          sudo k3s kubectl port-forward svc/llama-api-server-service 8080:8080 > /dev/null 2>&1 &
+          echo "Waiting for port-forward to be ready..."
+          sleep 5  # give it some time to establish the connection
+          echo "PID of port-forward process: $!"
+          echo "PORTER_PID=$!" >> $GITHUB_ENV
+
+      
+      - name: Test API endpoint
+        run: |
+          curl -X POST http://localhost:8080/v1/chat/completions \
+          -H 'accept:application/json' \
+          -H 'Content-Type: application/json' \
+          -d '{
+              "messages": [
+                  {"role": "system", "content": "You are a helpful assistant."},
+                  {"role": "user", "content": "Who is Robert Oppenheimer?"}
+              ],
+              "model": "llama-3-1b"
+          }'
+      
       - name: Create Logs Directory
         run: mkdir -p logs
       
       - name: Get Pod Name
         id: get-pod
         run: |
+          sleep 10
+          sudo k3s kubectl get pods
           POD_NAME=$(sudo k3s kubectl get pods -l app=llama-api-server --no-headers -o custom-columns=":metadata.name" | head -n 1)
           echo "POD_NAME=$POD_NAME" >> $GITHUB_ENV
 
-      - name: Save Pod Logs
+      - name: Display as well as save pod logs
         run: |
+          sleep 30
+          sudo k3s kubectl logs ${{ env.POD_NAME }}
           sudo k3s kubectl logs ${{ env.POD_NAME }} > "logs/pod_logs_$(date +'%Y-%m-%d').log"
 
-      - name: Test API and Save Output
+      - name: Test API again and Save Output
         run: |
           curl -X POST http://localhost:8080/v1/chat/completions \
                -H 'accept:application/json' \
